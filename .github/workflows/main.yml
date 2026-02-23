@@ -19,12 +19,12 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
       
-      - name: Create ZIP file
+      - name: Create ZIP with top-level folder
         run: |
-          zip -r h2-forms-${{ steps.version.outputs.VERSION }}.zip *
+          git archive --format=zip --prefix=h2-formulare/ -o "h2-formulare-${{ steps.version.outputs.VERSION }}.zip" HEAD
       
       - name: Upload Release Asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload ${{ github.ref_name }} h2-forms-${{ steps.version.outputs.VERSION }}.zip
+          gh release upload ${{ github.ref_name }} h2-formulare-${{ steps.version.outputs.VERSION }}.zip
