@@ -1,11 +1,9 @@
 <?php
 /**
  * Plugin Name: Formular
- * Plugin URI: https://h2com.eu/
  * Description: Ein WordPress Plugin zum Erstellen dynamischer Formulare mit anpassbaren Feldern
- * Version: 1.0.6
+ * Version: 1.0.7
  * Author: Henrik Hansen
- * Author URI: https://h2com.eu/
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: Formular
