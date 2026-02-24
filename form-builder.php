@@ -182,6 +182,9 @@ class FormBuilder
             return;
         }
 
+        // Lade WordPress Media Library
+        wp_enqueue_media();
+
         wp_enqueue_style('form-builder-admin', FORM_BUILDER_PLUGIN_URL . 'assets/css/admin.css', array(), FORM_BUILDER_VERSION);
         wp_enqueue_script('form-builder-admin', FORM_BUILDER_PLUGIN_URL . 'assets/js/admin.js', array('jquery', 'jquery-ui-sortable'), FORM_BUILDER_VERSION, true);
 
@@ -377,12 +380,18 @@ class FormBuilder
 
         // Validiere Felder
         foreach ($fields as $field) {
+            // Überspringe Felder ohne Eingabe (heading, text_info, image)
+            if (in_array($field['type'], array('heading', 'text_info', 'image'))) {
+                continue;
+            }
+            
             $field_name = 'field_' . $field['id'];
             $value = isset($_POST[$field_name]) ? $_POST[$field_name] : '';
+            $field_label = $field['label'] ?? 'Feld';
 
             // Erforderliche Felder prüfen
             if (!empty($field['required']) && empty($value)) {
-                $errors[] = $field['label'] . ' ist erforderlich.';
+                $errors[] = $field_label . ' ist erforderlich.';
                 continue;
             }
 
@@ -393,7 +402,7 @@ class FormBuilder
                     if ($value !== '') {
                         $signature = $this->save_signature_image($value, $form_id, $field['id']);
                         if (!$signature) {
-                            $errors[] = $field['label'] . ' konnte nicht gespeichert werden.';
+                            $errors[] = $field_label . ' konnte nicht gespeichert werden.';
                             break;
                         }
                         $value = $signature['url'];
@@ -403,7 +412,7 @@ class FormBuilder
                 case 'email':
                     $value = sanitize_email($value);
                     if (!empty($value) && !is_email($value)) {
-                        $errors[] = $field['label'] . ' ist keine gültige E-Mail-Adresse.';
+                        $errors[] = $field_label . ' ist keine gültige E-Mail-Adresse.';
                     }
                     break;
                 case 'url':
@@ -416,7 +425,7 @@ class FormBuilder
                     $value = sanitize_text_field($value);
             }
 
-            $form_data[$field['label']] = $value;
+            $form_data[$field_label] = $value;
         }
 
         if (!empty($errors)) {
@@ -437,6 +446,11 @@ class FormBuilder
         // E-Mail-Benachrichtigung senden
         if (!empty($settings['enable_email_notification'])) {
             $this->send_email_notification($form, $form_data, $settings, $attachments);
+        }
+
+        // Bestätigungsmail an Benutzer senden
+        if (!empty($settings['enable_user_confirmation'])) {
+            $this->send_user_confirmation($form, $form_data, $settings, $fields);
         }
 
         wp_send_json_success(array('message' => 'Formular erfolgreich gesendet!'));
@@ -484,6 +498,88 @@ class FormBuilder
         $message .= '</body></html>';
 
         wp_mail($to, $subject, $message, $headers, $attachments);
+    }
+
+    /**
+     * Sendet Bestätigungsmail an den Benutzer
+     */
+    private function send_user_confirmation($form, $form_data, $settings, $fields)
+    {
+        // Finde das E-Mail-Feld
+        if (empty($settings['user_email_field'])) {
+            return;
+        }
+
+        $user_email = null;
+        foreach ($fields as $field) {
+            $field_name = 'field_' . $field['id'];
+            if ($field_name === $settings['user_email_field'] && !empty($_POST[$field_name])) {
+                $user_email = sanitize_email($_POST[$field_name]);
+                break;
+            }
+        }
+
+        if (empty($user_email) || !is_email($user_email)) {
+            return;
+        }
+
+        // Bestimme die aktuelle Sprache (falls mehrsprachig)
+        $current_lang = isset($_GET['lang']) ? sanitize_text_field($_GET['lang']) : 'de';
+        if (!empty($settings['languages']) && is_array($settings['languages'])) {
+            if (!in_array($current_lang, $settings['languages'])) {
+                $current_lang = $settings['default_language'] ?? 'de';
+            }
+        }
+
+        // Hole Betreff und Nachricht
+        $subject_key = 'user_confirmation_subject' . ($current_lang !== 'de' ? '_' . $current_lang : '');
+        $message_key = 'user_confirmation_message' . ($current_lang !== 'de' ? '_' . $current_lang : '');
+        
+        $subject = !empty($settings[$subject_key]) ? $settings[$subject_key] : 
+                   (!empty($settings['user_confirmation_subject']) ? $settings['user_confirmation_subject'] : 'Vielen Dank für Ihre Nachricht');
+        $message_body = !empty($settings[$message_key]) ? $settings[$message_key] : 
+                        (!empty($settings['user_confirmation_message']) ? $settings['user_confirmation_message'] : 'Vielen Dank für Ihre Nachricht!');
+
+        // Ersetze Platzhalter
+        $placeholders = array(
+            '{form_name}' => $form['name'],
+            '{date}' => date_i18n(get_option('date_format')),
+            '{time}' => date_i18n(get_option('time_format')),
+        );
+
+        // Füge Feldplatzhalter hinzu: {field_FELDNAME}
+        foreach ($form_data as $label => $value) {
+            if (is_array($value)) {
+                $value = implode(', ', $value);
+            }
+            // Erstelle Platzhalter aus dem Label (Leerzeichen entfernen, Kleinbuchstaben)
+            $placeholder_key = '{field_' . strtolower(str_replace(' ', '_', $label)) . '}';
+            $placeholders[$placeholder_key] = $value;
+        }
+
+        // Ersetze Platzhalter in Betreff und Nachricht
+        foreach ($placeholders as $placeholder => $value) {
+            $subject = str_replace($placeholder, $value, $subject);
+            $message_body = str_replace($placeholder, $value, $message_body);
+        }
+
+        // E-Mail-Header
+        $headers = array('Content-Type: text/html; charset=UTF-8');
+        
+        if (!empty($settings['notification_from_name']) && !empty($settings['notification_from_email'])) {
+            $from_name = sanitize_text_field($settings['notification_from_name']);
+            $from_email = sanitize_email($settings['notification_from_email']);
+            $headers[] = "From: {$from_name} <{$from_email}>";
+        }
+
+        // E-Mail-Body
+        $message = '<html><body>';
+        $message .= '<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">';
+        $message .= wpautop(wp_kses_post($message_body));
+        $message .= '</div>';
+        $message .= '</body></html>';
+
+        wp_mail($user_email, $subject, $message, $headers);
     }
 
     /**

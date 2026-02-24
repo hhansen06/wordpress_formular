@@ -64,6 +64,33 @@ if (!function_exists('form_builder_get_translated_text')) {
                     <div class="form-field form-field-heading <?php echo esc_attr($css_class); ?>">
                         <h3 class="form-field-heading-text"><?php echo esc_html($field_label); ?></h3>
                     </div>
+                <?php elseif ($field['type'] === 'text_info'): ?>
+                    <!-- Text-Info / Informationstext -->
+                    <div class="form-field form-field-text-info <?php echo esc_attr($css_class); ?>">
+                        <?php if (!empty($field_label)): ?>
+                            <h4 class="form-field-text-info-title"><?php echo esc_html($field_label); ?></h4>
+                        <?php endif; ?>
+                        <div class="form-field-text-info-content">
+                            <?php 
+                            $text_info = form_builder_get_translated_text($field, 'text_info', $current_lang, $field['text_info'] ?? '');
+                            echo wpautop(wp_kses_post($text_info)); 
+                            ?>
+                        </div>
+                    </div>
+                <?php elseif ($field['type'] === 'image'): ?>
+                    <!-- Bild -->
+                    <div class="form-field form-field-image <?php echo esc_attr($css_class); ?>">
+                        <?php if (!empty($field_label)): ?>
+                            <h4 class="form-field-image-title"><?php echo esc_html($field_label); ?></h4>
+                        <?php endif; ?>
+                        <?php if (!empty($field['image_url'])): ?>
+                            <div class="form-field-image-wrapper">
+                                <img src="<?php echo esc_url($field['image_url']); ?>" 
+                                     alt="<?php echo esc_attr($field['image_alt'] ?? $field_label); ?>" 
+                                     class="form-field-image-img">
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 <?php else: ?>
                     <div class="form-field form-field-<?php echo esc_attr($field['type']); ?> <?php echo esc_attr($css_class); ?>">
                         <label for="<?php echo esc_attr($field_id); ?>" class="form-field-label">

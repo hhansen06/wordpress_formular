@@ -26,6 +26,9 @@
             
             // Setze fieldCounter basierend auf existierenden Feldern
             fieldCounter = $('.form-field-item').length;
+            
+            // Initialisiere E-Mail-Feld-Dropdown
+            updateEmailFieldDropdown();
         }
         
         // Feld hinzufügen
@@ -72,12 +75,16 @@
         // Zeige Einstellungen des neuen Felds
         const newField = $('.form-field-item').last();
         newField.find('.form-field-settings').show();
+        
+        // Aktualisiere E-Mail-Feld-Dropdown
+        updateEmailFieldDropdown();
     }
     
     function removeField() {
         if (confirm('Möchten Sie dieses Feld wirklich entfernen?')) {
             $(this).closest('.form-field-item').remove();
             updateFieldIndices();
+            updateEmailFieldDropdown();
         }
     }
     
@@ -103,19 +110,79 @@
             $optionsRow.hide();
         }
         
-        // Verstecke "Erforderlich" für Überschriften
+        // Zeige/verstecke Bild-URL und Alt-Text für image
+        const $imageUrlRow = $field.find('.field-image-url-row');
+        const $imageAltRow = $field.find('.field-image-alt-row');
+        if (type === 'image') {
+            $imageUrlRow.show();
+            $imageAltRow.show();
+        } else {
+            $imageUrlRow.hide();
+            $imageAltRow.hide();
+        }
+        
+        // Zeige/verstecke Text-Info für text_info
+        const $textInfoRow = $field.find('.field-text-info-row');
+        if (type === 'text_info') {
+            $textInfoRow.show();
+        } else {
+            $textInfoRow.hide();
+        }
+        
+        // Verstecke "Erforderlich" für heading, text_info, image
         const $requiredRow = $field.find('.field-required-row');
-        if (type === 'heading') {
+        if (['heading', 'text_info', 'image'].indexOf(type) !== -1) {
             $requiredRow.hide();
         } else {
             $requiredRow.show();
         }
+        
+        // Verstecke "Platzhalter" für heading, text_info, image, select, radio, checkbox_group
+        const $placeholderRow = $field.find('.field-placeholder-row');
+        if (['heading', 'text_info', 'image', 'select', 'radio', 'checkbox_group'].indexOf(type) !== -1) {
+            $placeholderRow.hide();
+        } else {
+            $placeholderRow.show();
+        }
+        
+        // Aktualisiere E-Mail-Feld-Dropdown wenn sich Typ ändert
+        updateEmailFieldDropdown();
     }
     
     function onFieldLabelChange() {
         const $field = $(this).closest('.form-field-item');
         const label = $(this).val() || 'Neues Feld';
         $field.find('.field-label-preview').text(label);
+        
+        // Aktualisiere E-Mail-Feld-Dropdown wenn Label sich ändert
+        updateEmailFieldDropdown();
+    }
+    
+    function updateEmailFieldDropdown() {
+        const $dropdown = $('#user-email-field');
+        if ($dropdown.length === 0) return;
+        
+        const currentValue = $dropdown.val();
+        const $options = $dropdown.find('option:not(:first)'); // Alle außer "-- Bitte wählen --"
+        $options.remove();
+        
+        // Sammle alle E-Mail-Felder
+        $('.form-field-item').each(function() {
+            const $field = $(this);
+            const type = $field.find('.field-type').val();
+            
+            if (type === 'email') {
+                const fieldId = $field.find('.field-id').val();
+                const label = $field.find('.field-label').first().val() || 'E-Mail';
+                
+                const $option = $('<option></option>')
+                    .val('field_' + fieldId)
+                    .text(label)
+                    .prop('selected', 'field_' + fieldId === currentValue);
+                
+                $dropdown.append($option);
+            }
+        });
     }
     
     function updateFieldIndices() {
@@ -162,17 +229,35 @@
         const fields = [];
         $('.form-field-item').each(function() {
             const $field = $(this);
-            const field = {
-                id: $field.find('.field-id').val(),
-                type: $field.find('.field-type').val(),
-                label: $field.find('.field-label').val(),
-                placeholder: $field.find('.field-placeholder').val(),
-                options: $field.find('.field-options').val(),
-                required: $field.find('.field-required').is(':checked'),
-                css_class: $field.find('.field-css-class').val()
-            };
+            const field = {};
             
-            if (field.label) {
+            // Sammle alle Feld-Inputs basierend auf ihrem name-Attribut
+            $field.find('input, textarea, select').each(function() {
+                const $input = $(this);
+                const name = $input.attr('name');
+                
+                if (!name) return;
+                
+                // Extrahiere den Schlüssel aus dem name-Attribut: fields[INDEX][KEY]
+                const match = name.match(/fields\[\d+\]\[([^\]]+)\]/);
+                
+                if (!match) return;
+                
+                const key = match[1];
+                
+                if ($input.attr('type') === 'checkbox') {
+                    // Speichere Checkbox-Wert als 1 oder 0 für PHP-Kompatibilität
+                    field[key] = $input.is(':checked') ? 1 : 0;
+                } else {
+                    const value = $input.val();
+                    if (value !== undefined && value !== null && value !== '') {
+                        field[key] = value;
+                    }
+                }
+            });
+            
+            // Mindestens ID und Type erforderlich
+            if (field.id && field.type) {
                 fields.push(field);
             }
         });
@@ -181,6 +266,9 @@
             alert('Bitte fügen Sie mindestens ein Feld hinzu.');
             return;
         }
+        
+        // Debug: Log die gesammelten Felder zur Überprüfung
+        console.log('Gespeicherte Felder:', fields);
         
         // Sammle Settings - alle Felder mit name="settings[...]"
         const settings = {};
@@ -320,6 +408,79 @@
         
         // Scroll nach oben
         $('html, body').animate({ scrollTop: 0 }, 300);
+    }
+    
+    // Media Library für Bild-Auswahl
+    function initMediaLibrary() {
+        let mediaFrame;
+        
+        $(document).on('click', '.select-image-button', function(e) {
+            e.preventDefault();
+            
+            const $button = $(this);
+            const $field = $button.closest('.form-field-item, tr');
+            const $urlInput = $field.find('.field-image-url');
+            const $altInput = $field.find('.field-image-alt');
+            const $preview = $field.find('.image-preview');
+            const $previewImg = $preview.find('img');
+            
+            // Erstelle Media Frame wenn nicht vorhanden
+            if (mediaFrame) {
+                mediaFrame.open();
+                return;
+            }
+            
+            mediaFrame = wp.media({
+                title: 'Bild auswählen',
+                button: {
+                    text: 'Bild verwenden'
+                },
+                multiple: false,
+                library: {
+                    type: 'image'
+                }
+            });
+            
+            // Wenn ein Bild ausgewählt wird
+            mediaFrame.on('select', function() {
+                const attachment = mediaFrame.state().get('selection').first().toJSON();
+                
+                // Setze URL
+                $urlInput.val(attachment.url);
+                
+                // Setze Alt-Text wenn vorhanden
+                if (attachment.alt && !$altInput.val()) {
+                    $altInput.val(attachment.alt);
+                }
+                
+                // Zeige Vorschau
+                $previewImg.attr('src', attachment.url);
+                $preview.show();
+            });
+            
+            mediaFrame.open();
+        });
+        
+        // Aktualisiere Vorschau wenn URL manuell geändert wird
+        $(document).on('change', '.field-image-url', function() {
+            const $input = $(this);
+            const url = $input.val();
+            const $field = $input.closest('.form-field-item, tr');
+            const $preview = $field.find('.image-preview');
+            const $previewImg = $preview.find('img');
+            
+            if (url) {
+                $previewImg.attr('src', url);
+                $preview.show();
+            } else {
+                $preview.hide();
+            }
+        });
+    }
+    
+    // Initialisiere Media Library bei Seitenload
+    if (typeof wp !== 'undefined' && wp.media) {
+        initMediaLibrary();
     }
     
 })(jQuery);

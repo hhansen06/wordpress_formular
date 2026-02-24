@@ -220,6 +220,58 @@ select.form-field-input {
     border-bottom: 2px solid #0073aa;
 }
 
+/* Text-Info */
+.form-field-text-info {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-left: 4px solid #0073aa;
+    border-radius: 4px;
+}
+
+.form-field-text-info-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 10px 0;
+}
+
+.form-field-text-info-content {
+    color: #555;
+    line-height: 1.6;
+}
+
+.form-field-text-info-content p {
+    margin: 0 0 10px 0;
+}
+
+.form-field-text-info-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Bild */
+.form-field-image {
+    margin: 20px 0;
+}
+
+.form-field-image-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 10px 0;
+}
+
+.form-field-image-wrapper {
+    text-align: center;
+}
+
+.form-field-image-img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
 /* Checkbox-Gruppe */
 .form-field-checkbox-group {
     display: flex;
