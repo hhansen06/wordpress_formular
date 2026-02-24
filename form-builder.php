@@ -384,7 +384,7 @@ class FormBuilder
             if (in_array($field['type'], array('heading', 'text_info', 'image'))) {
                 continue;
             }
-            
+
             $field_name = 'field_' . $field['id'];
             $value = isset($_POST[$field_name]) ? $_POST[$field_name] : '';
             $field_label = $field['label'] ?? 'Feld';
@@ -461,7 +461,16 @@ class FormBuilder
      */
     private function send_email_notification($form, $form_data, $settings, $attachments = array())
     {
-        $to = !empty($settings['notification_email']) ? sanitize_email($settings['notification_email']) : get_option('admin_email');
+        $to = !empty($settings['notification_email']) ? $settings['notification_email'] : get_option('admin_email');
+
+        // Verarbeite mehrere E-Mail-Adressen
+        $recipients = array_map('trim', explode(',', $to));
+        $recipients = array_filter($recipients, 'is_email');
+
+        if (empty($recipients)) {
+            return;
+        }
+
         $subject = !empty($settings['notification_subject']) ? $settings['notification_subject'] : 'Neuer Formulareintrag: ' . $form['name'];
 
         // Ersetze Platzhalter im Betreff
@@ -497,7 +506,10 @@ class FormBuilder
         $message .= '<p style="margin-top: 20px; color: #666; font-size: 12px;">Diese E-Mail wurde automatisch generiert. Bitte nicht antworten.</p>';
         $message .= '</body></html>';
 
-        wp_mail($to, $subject, $message, $headers, $attachments);
+        // Sende an alle Empfänger
+        foreach ($recipients as $recipient) {
+            wp_mail($recipient, $subject, $message, $headers, $attachments);
+        }
     }
 
     /**
@@ -514,7 +526,8 @@ class FormBuilder
         foreach ($fields as $field) {
             $field_name = 'field_' . $field['id'];
             if ($field_name === $settings['user_email_field'] && !empty($_POST[$field_name])) {
-                $user_email = sanitize_email($_POST[$field_name]);
+                $raw_email = $_POST[$field_name];
+                $user_email = sanitize_email($raw_email);
                 break;
             }
         }
@@ -534,11 +547,11 @@ class FormBuilder
         // Hole Betreff und Nachricht
         $subject_key = 'user_confirmation_subject' . ($current_lang !== 'de' ? '_' . $current_lang : '');
         $message_key = 'user_confirmation_message' . ($current_lang !== 'de' ? '_' . $current_lang : '');
-        
-        $subject = !empty($settings[$subject_key]) ? $settings[$subject_key] : 
-                   (!empty($settings['user_confirmation_subject']) ? $settings['user_confirmation_subject'] : 'Vielen Dank für Ihre Nachricht');
-        $message_body = !empty($settings[$message_key]) ? $settings[$message_key] : 
-                        (!empty($settings['user_confirmation_message']) ? $settings['user_confirmation_message'] : 'Vielen Dank für Ihre Nachricht!');
+
+        $subject = !empty($settings[$subject_key]) ? $settings[$subject_key] :
+            (!empty($settings['user_confirmation_subject']) ? $settings['user_confirmation_subject'] : 'Vielen Dank für Ihre Nachricht');
+        $message_body = !empty($settings[$message_key]) ? $settings[$message_key] :
+            (!empty($settings['user_confirmation_message']) ? $settings['user_confirmation_message'] : 'Vielen Dank für Ihre Nachricht!');
 
         // Ersetze Platzhalter
         $placeholders = array(
@@ -553,14 +566,16 @@ class FormBuilder
             if (in_array($field['type'], array('heading', 'text_info', 'image'))) {
                 continue;
             }
-            
+
             $field_name = 'field_' . $field['id'];
             $value = isset($_POST[$field_name]) ? $_POST[$field_name] : '';
-            
+
             if (is_array($value)) {
                 $value = implode(', ', $value);
+            } else {
+                $value = (string) $value;
             }
-            
+
             // Verwende den Slug als Platzhalter-Key
             $slug = !empty($field['slug']) ? $field['slug'] : sanitize_title($field['label'] ?? '');
             if (!empty($slug)) {
@@ -576,7 +591,7 @@ class FormBuilder
 
         // E-Mail-Header
         $headers = array('Content-Type: text/html; charset=UTF-8');
-        
+
         if (!empty($settings['notification_from_name']) && !empty($settings['notification_from_email'])) {
             $from_name = sanitize_text_field($settings['notification_from_name']);
             $from_email = sanitize_email($settings['notification_from_email']);
