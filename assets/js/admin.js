@@ -29,6 +29,9 @@
             
             // Initialisiere E-Mail-Feld-Dropdown
             updateEmailFieldDropdown();
+            
+            // Initialisiere Slugs für existierende Felder
+            initializeFieldSlugs();
         }
         
         // Feld hinzufügen
@@ -137,6 +140,14 @@
             $requiredRow.show();
         }
         
+        // Verstecke auch "Slug" für heading, text_info, image
+        const $slugRow = $field.find('.field-slug-row');
+        if (['heading', 'text_info', 'image'].indexOf(type) !== -1) {
+            $slugRow.hide();
+        } else {
+            $slugRow.show();
+        }
+        
         // Verstecke "Platzhalter" für heading, text_info, image, select, radio, checkbox_group
         const $placeholderRow = $field.find('.field-placeholder-row');
         if (['heading', 'text_info', 'image', 'select', 'radio', 'checkbox_group'].indexOf(type) !== -1) {
@@ -154,8 +165,53 @@
         const label = $(this).val() || 'Neues Feld';
         $field.find('.field-label-preview').text(label);
         
+        // Generiere und aktualisiere Slug
+        updateFieldSlug($field, label);
+        
         // Aktualisiere E-Mail-Feld-Dropdown wenn Label sich ändert
         updateEmailFieldDropdown();
+    }
+    
+    function updateFieldSlug($field, label) {
+        // Generiere Slug aus Label
+        const slug = generateSlug(label);
+        
+        // Aktualisiere hidden input und Anzeige
+        $field.find('.field-slug').val(slug);
+        $field.find('.field-slug-display').text('{field_' + slug + '}');
+    }
+    
+    function generateSlug(text) {
+        if (!text) return '';
+        
+        // Konvertiere zu Kleinbuchstaben und ersetze Umlaute
+        let slug = text.toLowerCase()
+            .replace(/ä/g, 'ae')
+            .replace(/ö/g, 'oe')
+            .replace(/ü/g, 'ue')
+            .replace(/ß/g, 'ss')
+            .replace(/\s+/g, '_')           // Leerzeichen zu Unterstrichen
+            .replace(/[^\w\-]+/g, '')       // Entferne Sonderzeichen
+            .replace(/\_\_+/g, '_')         // Mehrfache Unterstriche reduzieren
+            .replace(/^_+/, '')             // Führende Unterstriche entfernen
+            .replace(/_+$/, '');            // Nachgestellte Unterstriche entfernen
+        
+        return slug;
+    }
+    
+    function initializeFieldSlugs() {
+        $('.form-field-item').each(function() {
+            const $field = $(this);
+            const existingSlug = $field.find('.field-slug').val();
+            
+            // Wenn noch kein Slug vorhanden ist, generiere einen aus dem Label
+            if (!existingSlug) {
+                const label = $field.find('.field-label').first().val() || '';
+                if (label) {
+                    updateFieldSlug($field, label);
+                }
+            }
+        });
     }
     
     function updateEmailFieldDropdown() {

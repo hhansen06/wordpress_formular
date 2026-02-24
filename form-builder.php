@@ -547,14 +547,25 @@ class FormBuilder
             '{time}' => date_i18n(get_option('time_format')),
         );
 
-        // Füge Feldplatzhalter hinzu: {field_FELDNAME}
-        foreach ($form_data as $label => $value) {
+        // Füge Feldplatzhalter hinzu: {field_SLUG}
+        foreach ($fields as $field) {
+            // Überspringe Felder ohne Eingabe
+            if (in_array($field['type'], array('heading', 'text_info', 'image'))) {
+                continue;
+            }
+            
+            $field_name = 'field_' . $field['id'];
+            $value = isset($_POST[$field_name]) ? $_POST[$field_name] : '';
+            
             if (is_array($value)) {
                 $value = implode(', ', $value);
             }
-            // Erstelle Platzhalter aus dem Label (Leerzeichen entfernen, Kleinbuchstaben)
-            $placeholder_key = '{field_' . strtolower(str_replace(' ', '_', $label)) . '}';
-            $placeholders[$placeholder_key] = $value;
+            
+            // Verwende den Slug als Platzhalter-Key
+            $slug = !empty($field['slug']) ? $field['slug'] : sanitize_title($field['label'] ?? '');
+            if (!empty($slug)) {
+                $placeholders['{field_' . $slug . '}'] = $value;
+            }
         }
 
         // Ersetze Platzhalter in Betreff und Nachricht

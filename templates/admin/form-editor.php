@@ -180,6 +180,19 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                                             <?php endif; ?>
                                         </td>
                                     </tr>
+                                    <tr class="field-slug-row" style="display: <?php echo !in_array($field['type'], ['heading', 'text_info', 'image']) ? 'table-row' : 'none'; ?>;">
+                                        <th><label>Slug (für Platzhalter)</label></th>
+                                        <td>
+                                            <?php 
+                                            $field_slug = !empty($field['slug']) ? $field['slug'] : sanitize_title($field['label'] ?? '');
+                                            ?>
+                                            <code class="field-slug-display" style="display: inline-block; padding: 5px 10px; background: #f0f0f1; border-radius: 3px; font-size: 13px;">
+                                                {field_<?php echo esc_attr($field_slug); ?>}
+                                            </code>
+                                            <input type="hidden" class="field-slug" name="fields[<?php echo $index; ?>][slug]" value="<?php echo esc_attr($field_slug); ?>">
+                                            <p class="description">Verwenden Sie diesen Platzhalter in der Bestätigungsmail</p>
+                                        </td>
+                                    </tr>
                                     <tr class="field-placeholder-row">
                                         <th><label>Platzhalter</label></th>
                                         <td>
@@ -490,7 +503,7 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                             <input type="text" id="user-confirmation-subject" name="settings[user_confirmation_subject]" class="large-text" 
                                    value="<?php echo isset($form['settings']['user_confirmation_subject']) ? esc_attr($form['settings']['user_confirmation_subject']) : 'Vielen Dank für Ihre Nachricht'; ?>">
                         <?php endif; ?>
-                        <p class="description">Platzhalter: {form_name}, {date}, {time}, {field_FELDNAME}</p>
+                        <p class="description">Platzhalter: {form_name}, {date}, {time} und Feld-Slugs (siehe Slug bei jedem Feld)</p>
                     </td>
                 </tr>
                 <tr>
@@ -508,7 +521,7 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                         <?php else: ?>
                             <textarea id="user-confirmation-message" name="settings[user_confirmation_message]" class="large-text" rows="8"><?php echo isset($form['settings']['user_confirmation_message']) ? esc_textarea($form['settings']['user_confirmation_message']) : "Vielen Dank für Ihre Nachricht!\n\nWir haben Ihre Anfrage erhalten und werden uns so schnell wie möglich bei Ihnen melden.\n\nMit freundlichen Grüßen"; ?></textarea>
                         <?php endif; ?>
-                        <p class="description">Platzhalter: {form_name}, {date}, {time}, {field_FELDNAME} - z.B. {field_vorname} für ein Feld mit Label "Vorname"</p>
+                        <p class="description">Platzhalter: {form_name}, {date}, {time} und Feld-Slugs. Bei jedem Formularfeld wird der verfügbare Slug angezeigt (z.B. {field_vorname})</p>
                     </td>
                 </tr>
             </table>
@@ -547,6 +560,16 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                     <td>
                         <input type="text" class="field-label regular-text" name="fields[{{index}}][label]">
                         <p class="description">Optional für Bild- und Text-Info-Felder</p>
+                    </td>
+                </tr>
+                <tr class="field-slug-row" style="display: none;">
+                    <th><label>Slug (für Platzhalter)</label></th>
+                    <td>
+                        <code class="field-slug-display" style="display: inline-block; padding: 5px 10px; background: #f0f0f1; border-radius: 3px; font-size: 13px;">
+                            {field_}
+                        </code>
+                        <input type="hidden" class="field-slug" name="fields[{{index}}][slug]" value="">
+                        <p class="description">Verwenden Sie diesen Platzhalter in der Bestätigungsmail</p>
                     </td>
                 </tr>
                 <tr class="field-placeholder-row">
