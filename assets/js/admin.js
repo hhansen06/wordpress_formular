@@ -348,8 +348,8 @@
                         settings[arrayKey].push($input.val());
                     }
                 } else {
-                    // Einzelne Checkbox
-                    settings[key] = $input.is(':checked');
+                    // Einzelne Checkbox - speichere als 1 oder 0
+                    settings[key] = $input.is(':checked') ? 1 : 0;
                 }
             } else {
                 settings[key] = $input.val();
