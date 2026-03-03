@@ -10,6 +10,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PLUGIN_MAIN_FILE: form-builder.php
     
     steps:
       - name: Checkout code
@@ -18,13 +20,25 @@ jobs:
       - name: Get release version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      
+
+      - name: Set plugin version
+        run: |
+          sed -i "s/@VERSION@/${{ steps.version.outputs.VERSION }}/g" "$PLUGIN_MAIN_FILE"
+
       - name: Create ZIP with top-level folder
         run: |
-          git archive --format=zip --prefix=h2-formulare/ -o "h2-formulare-${{ steps.version.outputs.VERSION }}.zip" HEAD
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          mkdir -p "dist/$REPO_NAME"
+          rsync -a --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude "dist" \
+            ./ "dist/$REPO_NAME/"
+          (cd dist && zip -r "../${REPO_NAME}-${{ steps.version.outputs.VERSION }}.zip" "$REPO_NAME")
       
       - name: Upload Release Asset
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload ${{ github.ref_name }} h2-formulare-${{ steps.version.outputs.VERSION }}.zip
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          gh release upload ${{ github.ref_name }} "${REPO_NAME}-${{ steps.version.outputs.VERSION }}.zip"
