@@ -2,12 +2,10 @@
 /**
  * Plugin Name: Formular
  * Description: Ein WordPress Plugin zum Erstellen dynamischer Formulare mit anpassbaren Feldern
- * Version: 1.0.10
+ * Version: @VERSION@
  * Author: Henrik Hansen
- * License: GPL v2 or later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * License: GPL v2 
  * Text Domain: Formular
- * Domain Path: /languages
  */
 
 // Verhindere direkten Zugriff
