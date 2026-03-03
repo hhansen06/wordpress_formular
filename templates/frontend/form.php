@@ -57,6 +57,18 @@ if (!function_exists('form_builder_get_translated_text')) {
                 $field_label = form_builder_get_translated_text($field, 'label', $current_lang, $field['label'] ?? '');
                 $field_placeholder = form_builder_get_translated_text($field, 'placeholder', $current_lang, $field['placeholder'] ?? '');
                 $field_options = form_builder_get_translated_text($field, 'options', $current_lang, $field['options'] ?? '');
+                
+                // Prüfe ob globales Feld referenziert wird
+                if (!empty($field['global_field_id'])) {
+                    global $wpdb;
+                    $global_field = $wpdb->get_row($wpdb->prepare(
+                        "SELECT options FROM {$wpdb->prefix}form_builder_global_fields WHERE id = %d",
+                        intval($field['global_field_id'])
+                    ));
+                    if ($global_field) {
+                        $field_options = $global_field->options;
+                    }
+                }
                 ?>
                 
                 <?php if ($field['type'] === 'heading'): ?>
@@ -168,14 +180,29 @@ if (!function_exists('form_builder_get_translated_text')) {
                                 ?>
                                 <div class="form-field-checkbox-group">
                                     <?php foreach ($options as $index => $option): ?>
+                                        <?php
+                                        $option_raw = trim($option);
+                                        $is_checked = false;
+
+                                        if ($option_raw !== '' && preg_match('/;checked\s*$/i', $option_raw)) {
+                                            $is_checked = true;
+                                            $option_raw = preg_replace('/;checked\s*$/i', '', $option_raw);
+                                            $option_raw = trim($option_raw);
+                                        }
+
+                                        if ($option_raw === '') {
+                                            continue;
+                                        }
+                                        ?>
                                         <label class="form-field-checkbox-label">
                                             <input 
                                                 type="checkbox" 
                                                 id="<?php echo esc_attr($field_id . '_' . $index); ?>" 
                                                 name="<?php echo esc_attr($field_name); ?>[]" 
-                                                value="<?php echo esc_attr(trim($option)); ?>"
+                                                value="<?php echo esc_attr($option_raw); ?>"
+                                                <?php echo $is_checked ? 'checked' : ''; ?>
                                             >
-                                            <?php echo esc_html(trim($option)); ?>
+                                            <?php echo esc_html($option_raw); ?>
                                         </label>
                                     <?php endforeach; ?>
                                 </div>
@@ -190,6 +217,7 @@ if (!function_exists('form_builder_get_translated_text')) {
                                         id="<?php echo esc_attr($field_id); ?>" 
                                         name="<?php echo esc_attr($field_name); ?>" 
                                         value="1"
+                                        <?php echo !empty($field['default_checked']) ? 'checked' : ''; ?>
                                         <?php echo $required ? 'required' : ''; ?>
                                     >
                                     <?php echo esc_html($field_placeholder ?: 'Ja'); ?>

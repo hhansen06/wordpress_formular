@@ -59,6 +59,9 @@ class FormBuilder
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
+        // Upgrade-Prüfung beim Admin-Load
+        add_action('admin_init', array($this, 'check_database_upgrade'));
+
         // Admin-Menü
         add_action('admin_menu', array($this, 'add_admin_menu'));
 
@@ -77,6 +80,12 @@ class FormBuilder
         add_action('wp_ajax_form_builder_get_form', array($this, 'get_form'));
         add_action('wp_ajax_form_builder_submit', array($this, 'handle_form_submission'));
         add_action('wp_ajax_nopriv_form_builder_submit', array($this, 'handle_form_submission'));
+        
+        // Global Fields AJAX-Handlers
+        add_action('wp_ajax_form_builder_save_global_field', array($this, 'save_global_field'));
+        add_action('wp_ajax_form_builder_delete_global_field', array($this, 'delete_global_field'));
+        add_action('wp_ajax_form_builder_get_global_field', array($this, 'get_global_field'));
+        add_action('wp_ajax_form_builder_list_global_fields', array($this, 'list_global_fields'));
     }
 
     /**
@@ -114,9 +123,32 @@ class FormBuilder
             KEY form_id (form_id)
         ) $charset_collate;";
 
+        // Tabelle für globale Felder
+        $table_global_fields = $wpdb->prefix . 'form_builder_global_fields';
+        $sql_global_fields = "CREATE TABLE IF NOT EXISTS $table_global_fields (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            name varchar(255) NOT NULL,
+            description text,
+            type varchar(50) NOT NULL,
+            options longtext,
+            slug varchar(255) UNIQUE,
+            settings longtext,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY type (type)
+        ) $charset_collate;";
+
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql_forms);
         dbDelta($sql_submissions);
+        dbDelta($sql_global_fields);
+
+        // Upgrade: Füge slug-Spalte hinzu, falls sie fehlt
+        $has_slug = $wpdb->get_var("SHOW COLUMNS FROM $table_global_fields LIKE 'slug'");
+        if (empty($has_slug)) {
+            $wpdb->query("ALTER TABLE $table_global_fields ADD COLUMN slug varchar(255) UNIQUE AFTER type");
+        }
 
         // Version speichern
         add_option('form_builder_version', FORM_BUILDER_VERSION);
@@ -128,6 +160,24 @@ class FormBuilder
     public function deactivate()
     {
         // Optional: Cleanup bei Deaktivierung
+    }
+
+    /**
+     * Prüft und führt notwendige Datenbank-Upgrades durch
+     */
+    public function check_database_upgrade()
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'form_builder_global_fields';
+        
+        // Prüfe ob Tabelle existiert und slug-Spalte fehlt
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table'") === $table;
+        if ($table_exists) {
+            $has_slug = $wpdb->get_var("SHOW COLUMNS FROM $table LIKE 'slug'");
+            if (empty($has_slug)) {
+                $wpdb->query("ALTER TABLE $table ADD COLUMN slug varchar(255) UNIQUE AFTER type");
+            }
+        }
     }
 
     /**
@@ -170,6 +220,15 @@ class FormBuilder
             'manage_options',
             'form-builder-submissions',
             array($this, 'render_submissions_page')
+        );
+
+        add_submenu_page(
+            'form-builder',
+            'Globale Felder',
+            'Globale Felder',
+            'manage_options',
+            'form-builder-global-fields',
+            array($this, 'render_global_fields_page')
         );
     }
 
@@ -242,6 +301,154 @@ class FormBuilder
     public function render_submissions_page()
     {
         include FORM_BUILDER_PLUGIN_DIR . 'templates/admin/submissions-list.php';
+    }
+
+    /**
+     * Rendert die Seite für globale Felder
+     */
+    public function render_global_fields_page()
+    {
+        include FORM_BUILDER_PLUGIN_DIR . 'templates/admin/global-fields.php';
+    }
+
+    /**
+     * Speichert ein globales Feld
+     */
+    public function save_global_field()
+    {
+        check_ajax_referer('form_builder_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Keine Berechtigung.'));
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'form_builder_global_fields';
+
+        $field_id = isset($_POST['field_id']) ? intval($_POST['field_id']) : 0;
+        $name = sanitize_text_field($_POST['name']);
+        $description = sanitize_textarea_field($_POST['description']);
+        $type = sanitize_text_field($_POST['type']);
+        $options = isset($_POST['options']) ? sanitize_textarea_field($_POST['options']) : '';
+        $slug = sanitize_key($_POST['slug']);
+
+        if (empty($name) || empty($type) || empty($slug)) {
+            wp_send_json_error(array('message' => 'Bitte füllen Sie alle erforderlichen Felder aus.'));
+        }
+
+        // Prüfe auf doppelte Slugs
+        if ($field_id > 0) {
+            $existing = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM $table WHERE slug = %s AND id != %d",
+                $slug,
+                $field_id
+            ));
+        } else {
+            $existing = $wpdb->get_row($wpdb->prepare(
+                "SELECT id FROM $table WHERE slug = %s",
+                $slug
+            ));
+        }
+
+        if ($existing) {
+            wp_send_json_error(array('message' => 'Ein Feld mit diesem Slug existiert bereits.'));
+        }
+
+        $data = array(
+            'name' => $name,
+            'description' => $description,
+            'type' => $type,
+            'options' => $options,
+            'slug' => $slug,
+            'settings' => json_encode(array()),
+        );
+
+        if ($field_id > 0) {
+            $wpdb->update($table, $data, array('id' => $field_id));
+        } else {
+            $wpdb->insert($table, $data);
+            $field_id = $wpdb->insert_id;
+        }
+
+        wp_send_json_success(array('field_id' => $field_id, 'message' => 'Globales Feld gespeichert!'));
+    }
+
+    /**
+     * Löscht ein globales Feld
+     */
+    public function delete_global_field()
+    {
+        check_ajax_referer('form_builder_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Keine Berechtigung.'));
+        }
+
+        global $wpdb;
+        $field_id = intval($_POST['field_id']);
+        $table = $wpdb->prefix . 'form_builder_global_fields';
+
+        $wpdb->delete($table, array('id' => $field_id));
+
+        wp_send_json_success(array('message' => 'Globales Feld gelöscht!'));
+    }
+
+    /**
+     * Holt ein globales Feld
+     */
+    public function get_global_field()
+    {
+        check_ajax_referer('form_builder_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Keine Berechtigung.'));
+        }
+
+        global $wpdb;
+        $field_id = intval($_POST['field_id']);
+        $table = $wpdb->prefix . 'form_builder_global_fields';
+
+        $field = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table WHERE id = %d",
+            $field_id
+        ), ARRAY_A);
+
+        if ($field) {
+            $field['options'] = stripslashes($field['options']);
+            $field['settings'] = json_decode($field['settings'], true);
+            wp_send_json_success($field);
+        } else {
+            wp_send_json_error(array('message' => 'Globales Feld nicht gefunden.'));
+        }
+    }
+
+    /**
+     * Listet alle globalen Felder auf
+     */
+    public function list_global_fields()
+    {
+        check_ajax_referer('form_builder_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Keine Berechtigung.'));
+        }
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'form_builder_global_fields';
+
+        $fields = $wpdb->get_results("SELECT * FROM $table ORDER BY name ASC");
+
+        $formatted_fields = array();
+        foreach ($fields as $field) {
+            $formatted_fields[] = array(
+                'id' => $field->id,
+                'name' => $field->name,
+                'type' => $field->type,
+                'slug' => $field->slug,
+            );
+        }
+
+        wp_send_json_success($formatted_fields);
     }
 
     /**
@@ -421,6 +628,26 @@ class FormBuilder
                 case 'textarea':
                     $value = sanitize_textarea_field($value);
                     break;
+                case 'checkbox_group':
+                    if (is_array($value)) {
+                        $value = array_map('sanitize_text_field', $value);
+                        $value = array_filter($value, function ($item) {
+                            return $item !== '';
+                        });
+                        // Array-Keys neu indizieren nach Filter
+                        $value = array_values($value);
+                    } elseif (is_string($value) && !empty($value)) {
+                        // Fallback: Wenn als String gesendet wurde (sollte nicht passieren)
+                        // Behandle es als einzelnen Wert
+                        $value = array(sanitize_text_field($value));
+                    } else {
+                        $value = array();
+                    }
+                    error_log('Checkbox group value for ' . $field_label . ': ' . print_r($value, true));
+                    break;
+                case 'checkbox':
+                    $value = !empty($value) ? '1' : '0';
+                    break;
                 default:
                     $value = sanitize_text_field($value);
             }
@@ -431,6 +658,10 @@ class FormBuilder
         if (!empty($errors)) {
             wp_send_json_error(array('message' => implode('<br>', $errors)));
         }
+
+        // Debug: Log form_data before saving
+        error_log('Form data to save: ' . print_r($form_data, true));
+        error_log('Form data JSON: ' . json_encode($form_data));
 
         // Speichere Submission
         $wpdb->insert(

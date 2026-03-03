@@ -279,11 +279,30 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                                                                   rows="3"><?php echo esc_textarea($field['options_' . $lang] ?? ($lang === 'de' ? ($field['options'] ?? '') : '')); ?></textarea>
                                                     </div>
                                                 <?php endforeach; ?>
-                                                <p class="description">Eine Option pro Zeile</p>
+                                                <p class="description">Eine Option pro Zeile. Bei Checkbox-Gruppe: Option mit ;checked vorbelegen (z.B. Newsletter;checked)</p>
                                             <?php else: ?>
                                                 <textarea class="field-options regular-text" name="fields[<?php echo $index; ?>][options]" rows="3"><?php echo esc_textarea($field['options'] ?? ''); ?></textarea>
-                                                <p class="description">Eine Option pro Zeile</p>
+                                                <p class="description">Eine Option pro Zeile. Bei Checkbox-Gruppe: Option mit ;checked vorbelegen (z.B. Newsletter;checked)</p>
                                             <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <tr class="field-global-field-row" style="display: <?php echo in_array($field['type'], ['select', 'radio', 'checkbox_group']) ? 'table-row' : 'none'; ?>;">
+                                        <th><label>Globales Feld</label></th>
+                                        <td>
+                                            <select class="field-global-field" name="fields[<?php echo $index; ?>][global_field_id]" data-value="<?php echo !empty($field['global_field_id']) ? intval($field['global_field_id']) : ''; ?>">
+                                                <option value="">-- Keine (manuelle Optionen verwenden) --</option>
+                                            </select>
+                                            <p class="description">Wählen Sie ein vordefiniertes globales Feld aus</p>
+                                        </td>
+                                    </tr>
+                                    <tr class="field-default-checked-row" style="display: <?php echo $field['type'] === 'checkbox' ? 'table-row' : 'none'; ?>;">
+                                        <th><label>Vorbelegt</label></th>
+                                        <td>
+                                            <label>
+                                                <input type="checkbox" class="field-default-checked" name="fields[<?php echo $index; ?>][default_checked]"
+                                                       value="1" <?php checked(!empty($field['default_checked'])); ?>>
+                                                Checkbox ist standardmäßig aktiviert
+                                            </label>
                                         </td>
                                     </tr>
                                     <tr class="field-required-row" style="display: <?php echo !in_array($field['type'], ['heading', 'text_info', 'image']) ? 'table-row' : 'none'; ?>;">
@@ -582,7 +601,25 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                     <th><label>Optionen</label></th>
                     <td>
                         <textarea class="field-options regular-text" name="fields[{{index}}][options]" rows="3"></textarea>
-                        <p class="description">Eine Option pro Zeile</p>
+                        <p class="description">Eine Option pro Zeile. Bei Checkbox-Gruppe: Option mit ;checked vorbelegen (z.B. Newsletter;checked)</p>
+                    </td>
+                </tr>
+                <tr class="field-global-field-row" style="display: none;">
+                    <th><label>Globales Feld</label></th>
+                    <td>
+                        <select class="field-global-field" name="fields[{{index}}][global_field_id]" data-value="">
+                            <option value="">-- Keine (manuelle Optionen verwenden) --</option>
+                        </select>
+                        <p class="description">Wählen Sie ein vordefiniertes globales Feld aus</p>
+                    </td>
+                </tr>
+                <tr class="field-default-checked-row" style="display: none;">
+                    <th><label>Vorbelegt</label></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" class="field-default-checked" name="fields[{{index}}][default_checked]" value="1">
+                            Checkbox ist standardmäßig aktiviert
+                        </label>
                     </td>
                 </tr>
                 <tr class="field-image-url-row" style="display: none;">

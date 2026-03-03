@@ -74,6 +74,10 @@ $forms = $wpdb->get_results("SELECT id, name FROM $table_forms ORDER BY name ASC
                                         $url = esc_url($value);
                                         echo '<dd><a href="' . $url . '" target="_blank" rel="noopener">' . $url . '</a><br><img src="' . $url . '" alt="" style="max-width:150px;height:auto;"></dd>';
                                     } else {
+                                        // Array-Werte (z.B. Checkbox-Gruppen) zu String konvertieren
+                                        if (is_array($value)) {
+                                            $value = implode(', ', $value);
+                                        }
                                         echo '<dd>' . esc_html($value) . '</dd>';
                                     }
                                 }

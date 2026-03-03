@@ -32,6 +32,9 @@
 
             // Initialisiere Slugs für existierende Felder
             initializeFieldSlugs();
+
+            // Lade globale Felder
+            loadGlobalFields();
         }
 
         // Feld hinzufügen
@@ -81,6 +84,9 @@
 
         // Aktualisiere E-Mail-Feld-Dropdown
         updateEmailFieldDropdown();
+
+        // Lade globale Felder auch für neue Felder
+        loadGlobalFields();
     }
 
     function removeField() {
@@ -111,6 +117,22 @@
             $optionsRow.show();
         } else {
             $optionsRow.hide();
+        }
+
+        // Zeige/verstecke Globales Feld für select, radio, checkbox_group
+        const $globalFieldRow = $field.find('.field-global-field-row');
+        if (['select', 'radio', 'checkbox_group'].indexOf(type) !== -1) {
+            $globalFieldRow.show();
+        } else {
+            $globalFieldRow.hide();
+        }
+
+        // Zeige/verstecke Vorbelegt-Option für checkbox
+        const $defaultCheckedRow = $field.find('.field-default-checked-row');
+        if (type === 'checkbox') {
+            $defaultCheckedRow.show();
+        } else {
+            $defaultCheckedRow.hide();
         }
 
         // Zeige/verstecke Bild-URL und Alt-Text für image
@@ -382,7 +404,8 @@
                         window.history.pushState({}, '', newUrl);
                     }
                 } else {
-                    showMessage(response.data.message || formBuilderAdmin.strings.errorSaving, 'error');
+                    var errorMsg = (response && response.data && response.data.message) || formBuilderAdmin.strings.errorSaving;
+                    showMessage(errorMsg, 'error');
                 }
             })
             .fail(function () {
@@ -412,7 +435,8 @@
                 if (response.success) {
                     location.reload();
                 } else {
-                    alert(response.data.message || 'Fehler beim Löschen');
+                    var errorMsg = (response && response.data && response.data.message) || 'Fehler beim Löschen';
+                    alert(errorMsg);
                 }
             })
             .fail(function () {
@@ -532,6 +556,60 @@
                 $preview.hide();
             }
         });
+    }
+
+    // Lade globale Felder
+    function loadGlobalFields() {
+        console.log('loadGlobalFields called - Anzahl .field-global-field:', $('.field-global-field').length);
+        
+        const data = {
+            action: 'form_builder_list_global_fields',
+            nonce: formBuilderAdmin.nonce
+        };
+
+        $.post(formBuilderAdmin.ajaxUrl, data, function(response) {
+            console.log('Global Fields Response:', response);
+            
+            if (response.success && response.data) {
+                const globalFields = response.data;
+                console.log('Loaded global fields:', globalFields);
+                
+                // Bestücke alle Globales-Feld-Dropdown
+                $('.field-global-field').each(function() {
+                    const $select = $(this);
+                    const savedValue = $select.attr('data-value'); // Lese gespeicherten Wert
+                    const currentValue = $select.val();
+                    
+                    // Entferne alte Optionen außer der ersten
+                    $select.find('option:not(:first)').remove();
+                    
+                    // Füge neue Optionen ein
+                    globalFields.forEach(function(field) {
+                        $select.append('<option value="' + field.id + '">' + escapeHtml(field.name) + '</option>');
+                    });
+                    
+                    // Setze den gespeicherten Wert, oder den aktuellen falls vorhanden
+                    if (savedValue && savedValue !== '') {
+                        $select.val(savedValue);
+                    } else if (currentValue) {
+                        $select.val(currentValue);
+                    }
+                });
+                
+                console.log('Global fields filled');
+            } else {
+                console.error('Failed to load global fields:', response);
+            }
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error('AJAX Error loading global fields:', textStatus, errorThrown, jqXHR.responseText);
+        });
+    }
+
+    // Hilfsfunktion zum Escapen von HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     // Initialisiere Media Library bei Seitenload
