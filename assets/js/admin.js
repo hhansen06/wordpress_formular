@@ -185,13 +185,55 @@
     function onFieldLabelChange() {
         const $field = $(this).closest('.form-field-item');
         const label = $(this).val() || 'Neues Feld';
-        $field.find('.field-label-preview').text(label);
+        const $translation = $(this).closest('.field-translation');
+        const inputLang = $translation.length ? String($translation.data('lang')) : '';
+        const defaultLang = String($('#default-language').val() || '');
 
-        // Generiere und aktualisiere Slug
-        updateFieldSlug($field, label);
+        // Preview soll immer die aktuell bearbeitete Sprache zeigen.
+        updateFieldPreviewLabel($field);
+
+        // Slug nur aus Standardsprache erzeugen (oder einsprachig),
+        // damit er beim Bearbeiten anderer Sprachen stabil bleibt.
+        if (!$translation.length || inputLang === defaultLang) {
+            updateFieldSlug($field, label);
+        }
 
         // Aktualisiere E-Mail-Feld-Dropdown wenn Label sich ändert
         updateEmailFieldDropdown();
+    }
+
+    function updateFieldPreviewLabel($field) {
+        let label = '';
+        const currentLang = String($('#current-edit-language').val() || '');
+
+        // Bevorzuge das Label der aktuell gewählten Bearbeitungssprache.
+        if (currentLang) {
+            const $preferred = $field.find('.field-translation[data-lang="' + currentLang + '"] .field-label').first();
+            if ($preferred.length) {
+                label = ($preferred.val() || '').trim();
+            }
+        }
+
+        // Fallback: sichtbares Sprachfeld.
+        if (!label) {
+            const $visible = $field.find('.field-translation:visible .field-label').first();
+            if ($visible.length) {
+                label = ($visible.val() || '').trim();
+            }
+        }
+
+        // Fallback: erstes befülltes Label im Feld.
+        if (!label) {
+            $field.find('.field-label').each(function () {
+                const value = ($(this).val() || '').trim();
+                if (value) {
+                    label = value;
+                    return false;
+                }
+            });
+        }
+
+        $field.find('.field-label-preview').text(label || 'Neues Feld');
     }
 
     function updateFieldSlug($field, label) {
@@ -251,7 +293,26 @@
 
             if (type === 'email') {
                 const fieldId = $field.find('.field-id').val();
-                const label = $field.find('.field-label').first().val() || 'E-Mail';
+                let label = '';
+                const currentLang = String($('#current-edit-language').val() || '');
+                if (currentLang) {
+                    const $preferred = $field.find('.field-translation[data-lang="' + currentLang + '"] .field-label').first();
+                    if ($preferred.length) {
+                        label = ($preferred.val() || '').trim();
+                    }
+                }
+                if (!label) {
+                    const $visible = $field.find('.field-translation:visible .field-label').first();
+                    if ($visible.length) {
+                        label = ($visible.val() || '').trim();
+                    }
+                }
+                if (!label) {
+                    label = ($field.find('.field-label').first().val() || '').trim();
+                }
+                if (!label) {
+                    label = 'E-Mail';
+                }
 
                 const $option = $('<option></option>')
                     .val('field_' + fieldId)
@@ -285,8 +346,13 @@
         $('#current-edit-language').val(lang);
 
         // Zeige/Verstecke entsprechende Übersetzungsfelder
-        $('.field-translation').hide();
-        $('.field-translation[data-lang="' + lang + '"]').show();
+        $('.field-translation').not('.field-label-translation, .field-always-visible-translation').hide();
+        $('.field-translation[data-lang="' + lang + '"]').not('.field-label-translation, .field-always-visible-translation').show();
+
+        // Aktualisiere Label-Preview in allen Feldern auf die gewählte Sprache.
+        $('.form-field-item').each(function () {
+            updateFieldPreviewLabel($(this));
+        });
     }
 
     function saveForm(e) {
@@ -353,27 +419,34 @@
         $('input[name^="settings["], textarea[name^="settings["], select[name^="settings["]').each(function () {
             const $input = $(this);
             const name = $input.attr('name');
-            const match = name.match(/settings\[([^\]]+)\]/);
+            const match = name.match(/^settings\[([^\]]+)\](\[\])?$/);
 
             if (!match) return;
 
             const key = match[1];
+            const isArrayField = !!match[2];
 
             if ($input.attr('type') === 'checkbox') {
-                if (key.includes('[]')) {
-                    // Array von Checkboxen (z.B. languages[])
-                    const arrayKey = key.replace('[]', '');
-                    if (!settings[arrayKey]) {
-                        settings[arrayKey] = [];
+                if (isArrayField) {
+                    // Array von Checkboxen (z.B. settings[languages][])
+                    if (!Array.isArray(settings[key])) {
+                        settings[key] = [];
                     }
                     if ($input.is(':checked')) {
-                        settings[arrayKey].push($input.val());
+                        settings[key].push($input.val());
                     }
                 } else {
                     // Einzelne Checkbox - speichere als 1 oder 0
                     settings[key] = $input.is(':checked') ? 1 : 0;
                 }
             } else {
+                if (isArrayField) {
+                    if (!Array.isArray(settings[key])) {
+                        settings[key] = [];
+                    }
+                    settings[key].push($input.val());
+                    return;
+                }
                 settings[key] = $input.val();
             }
         });
@@ -561,33 +634,33 @@
     // Lade globale Felder
     function loadGlobalFields() {
         console.log('loadGlobalFields called - Anzahl .field-global-field:', $('.field-global-field').length);
-        
+
         const data = {
             action: 'form_builder_list_global_fields',
             nonce: formBuilderAdmin.nonce
         };
 
-        $.post(formBuilderAdmin.ajaxUrl, data, function(response) {
+        $.post(formBuilderAdmin.ajaxUrl, data, function (response) {
             console.log('Global Fields Response:', response);
-            
+
             if (response.success && response.data) {
                 const globalFields = response.data;
                 console.log('Loaded global fields:', globalFields);
-                
+
                 // Bestücke alle Globales-Feld-Dropdown
-                $('.field-global-field').each(function() {
+                $('.field-global-field').each(function () {
                     const $select = $(this);
                     const savedValue = $select.attr('data-value'); // Lese gespeicherten Wert
                     const currentValue = $select.val();
-                    
+
                     // Entferne alte Optionen außer der ersten
                     $select.find('option:not(:first)').remove();
-                    
+
                     // Füge neue Optionen ein
-                    globalFields.forEach(function(field) {
+                    globalFields.forEach(function (field) {
                         $select.append('<option value="' + field.id + '">' + escapeHtml(field.name) + '</option>');
                     });
-                    
+
                     // Setze den gespeicherten Wert, oder den aktuellen falls vorhanden
                     if (savedValue && savedValue !== '') {
                         $select.val(savedValue);
@@ -595,12 +668,12 @@
                         $select.val(currentValue);
                     }
                 });
-                
+
                 console.log('Global fields filled');
             } else {
                 console.error('Failed to load global fields:', response);
             }
-        }).fail(function(jqXHR, textStatus, errorThrown) {
+        }).fail(function (jqXHR, textStatus, errorThrown) {
             console.error('AJAX Error loading global fields:', textStatus, errorThrown, jqXHR.responseText);
         });
     }

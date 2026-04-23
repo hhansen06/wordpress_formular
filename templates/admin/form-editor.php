@@ -40,15 +40,21 @@ $field_types = array(
     'signature' => 'Unterschrift',
 );
 
-$available_languages = array(
-    'de' => 'Deutsch',
-    'en' => 'English',
-    'fr' => 'Français',
-    'es' => 'Español',
-    'it' => 'Italiano',
-);
+$available_languages = function_exists('form_builder_get_available_languages')
+    ? form_builder_get_available_languages()
+    : array(
+        'de' => 'Deutsch',
+        'en' => 'English',
+        'fr' => 'Français',
+        'es' => 'Español',
+        'it' => 'Italiano',
+    );
 
-$form_languages = array('de'); // Default
+$language_label = static function ($code) use ($available_languages) {
+    return $available_languages[$code] ?? strtoupper($code);
+};
+
+$form_languages = array(function_exists('form_builder_get_default_language_code') ? form_builder_get_default_language_code() : 'de');
 if ($form && !empty($form['settings']['languages'])) {
     $languages = $form['settings']['languages'];
     // Stelle sicher, dass es ein Array ist
@@ -59,8 +65,18 @@ if ($form && !empty($form['settings']['languages'])) {
     }
 }
 
-$default_language = $form && !empty($form['settings']['default_language']) ? $form['settings']['default_language'] : 'de';
-$current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang']) : $default_language;
+$default_language = $form && !empty($form['settings']['default_language'])
+    ? sanitize_key($form['settings']['default_language'])
+    : (function_exists('form_builder_get_default_language_code') ? form_builder_get_default_language_code() : 'de');
+
+if (!in_array($default_language, $form_languages, true)) {
+    $default_language = !empty($form_languages) ? $form_languages[0] : $default_language;
+}
+
+$current_edit_language = isset($_GET['lang']) ? sanitize_key(wp_unslash($_GET['lang'])) : $default_language;
+if (!in_array($current_edit_language, $form_languages, true)) {
+    $current_edit_language = $default_language;
+}
 ?>
 
 <div class="wrap">
@@ -77,7 +93,7 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                 <label><strong>Bearbeiten in: </strong></label>
                 <?php foreach ($form_languages as $lang): ?>
                     <button type="button" class="button <?php echo $lang === $current_edit_language ? 'button-primary' : ''; ?>" 
-                            data-lang="<?php echo $lang; ?>"><?php echo $available_languages[$lang]; ?></button>
+                            data-lang="<?php echo esc_attr($lang); ?>"><?php echo esc_html($language_label($lang)); ?></button>
                 <?php endforeach; ?>
             </div>
             <div style="clear: both;"></div>
@@ -166,11 +182,11 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                                         <td>
                                             <?php if (count($form_languages) > 1): ?>
                                                 <?php foreach ($form_languages as $lang): ?>
-                                                    <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                                        <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                                    <div class="field-translation field-label-translation" data-lang="<?php echo esc_attr($lang); ?>">
+                                                        <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                                         <input type="text" class="field-label regular-text" 
                                                                name="fields[<?php echo $index; ?>][label_<?php echo $lang; ?>]" 
-                                                               value="<?php echo esc_attr($field['label_' . $lang] ?? ($lang === 'de' ? $field['label'] : '')); ?>" 
+                                                               value="<?php echo esc_attr($field['label_' . $lang] ?? ($lang === $default_language ? ($field['label'] ?? '') : '')); ?>" 
                                                                <?php echo $lang === $default_language ? 'required' : ''; ?>>
                                                     </div>
                                                 <?php endforeach; ?>
@@ -198,8 +214,8 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                                         <td>
                                             <?php if (count($form_languages) > 1): ?>
                                                 <?php foreach ($form_languages as $lang): ?>
-                                                    <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                                        <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                                    <div class="field-translation field-always-visible-translation" data-lang="<?php echo esc_attr($lang); ?>">
+                                                        <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                                         <input type="text" class="field-placeholder regular-text" 
                                                                name="fields[<?php echo $index; ?>][placeholder_<?php echo $lang; ?>]" 
                                                                value="<?php echo esc_attr($field['placeholder_' . $lang] ?? ''); ?>">
@@ -253,10 +269,10 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                                             <?php if (count($form_languages) > 1): ?>
                                                 <?php foreach ($form_languages as $lang): ?>
                                                     <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                                        <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                                        <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                                         <textarea class="field-text-info large-text" 
                                                                   name="fields[<?php echo $index; ?>][text_info_<?php echo $lang; ?>]" 
-                                                                  rows="5"><?php echo esc_textarea($field['text_info_' . $lang] ?? ($lang === 'de' ? ($field['text_info'] ?? '') : '')); ?></textarea>
+                                                                  rows="5"><?php echo esc_textarea($field['text_info_' . $lang] ?? ($lang === $default_language ? ($field['text_info'] ?? '') : '')); ?></textarea>
                                                     </div>
                                                 <?php endforeach; ?>
                                             <?php else: ?>
@@ -272,11 +288,11 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                                         <td>
                                             <?php if (count($form_languages) > 1): ?>
                                                 <?php foreach ($form_languages as $lang): ?>
-                                                    <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                                        <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                                    <div class="field-translation field-always-visible-translation" data-lang="<?php echo esc_attr($lang); ?>">
+                                                        <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                                         <textarea class="field-options regular-text" 
                                                                   name="fields[<?php echo $index; ?>][options_<?php echo $lang; ?>]" 
-                                                                  rows="3"><?php echo esc_textarea($field['options_' . $lang] ?? ($lang === 'de' ? ($field['options'] ?? '') : '')); ?></textarea>
+                                                                  rows="3"><?php echo esc_textarea($field['options_' . $lang] ?? ($lang === $default_language ? ($field['options'] ?? '') : '')); ?></textarea>
                                                     </div>
                                                 <?php endforeach; ?>
                                                 <p class="description">Eine Option pro Zeile. Bei Checkbox-Gruppe: Option mit ;checked vorbelegen (z.B. Newsletter;checked)</p>
@@ -346,7 +362,7 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                         <?php if (count($form_languages) > 1): ?>
                             <?php foreach ($form_languages as $lang): ?>
                                 <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                    <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                     <input type="text" name="settings[submit_button_text_<?php echo $lang; ?>]" class="regular-text" 
                                            value="<?php echo isset($form['settings']['submit_button_text_' . $lang]) ? esc_attr($form['settings']['submit_button_text_' . $lang]) : 'Absenden'; ?>">
                                 </div>
@@ -365,13 +381,39 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                         <?php if (count($form_languages) > 1): ?>
                             <?php foreach ($form_languages as $lang): ?>
                                 <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                    <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                     <textarea name="settings[success_message_<?php echo $lang; ?>]" class="large-text" rows="3"><?php echo isset($form['settings']['success_message_' . $lang]) ? esc_textarea($form['settings']['success_message_' . $lang]) : 'Vielen Dank für Ihre Nachricht!'; ?></textarea>
                                 </div>
                             <?php endforeach; ?>
                         <?php else: ?>
                             <textarea id="success-message" name="settings[success_message]" class="large-text" rows="3"><?php echo isset($form['settings']['success_message']) ? esc_textarea($form['settings']['success_message']) : 'Vielen Dank für Ihre Nachricht!'; ?></textarea>
                         <?php endif; ?>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="pdf-filename">PDF-Dateiname</label>
+                    </th>
+                    <td>
+                        <input type="text" id="pdf-filename" name="settings[pdf_filename]" class="large-text"
+                               value="<?php echo isset($form['settings']['pdf_filename']) ? esc_attr($form['settings']['pdf_filename']) : ''; ?>"
+                               placeholder="z.B. Anmeldung-{field_vorname}-{field_nachname}">
+                        <p class="description">
+                            Dateiname für den PDF-Export (ohne <code>.pdf</code>). Verwende Feld-Slugs als Platzhalter: <code>{field_slug}</code>.<br>
+                            Verfügbare Felder: <?php
+                                if (!empty($form['fields'])) {
+                                    $slugs = array();
+                                    foreach ($form['fields'] as $f) {
+                                        if (!empty($f['slug']) && !in_array($f['type'], array('heading','text_info','image'), true)) {
+                                            $slugs[] = '<code>{field_' . esc_html($f['slug']) . '}</code>';
+                                        }
+                                    }
+                                    echo !empty($slugs) ? implode(', ', $slugs) : '(noch keine Felder mit Slug vorhanden)';
+                                } else {
+                                    echo '(Formular speichern um Felder zu sehen)';
+                                }
+                            ?>
+                        </p>
                     </td>
                 </tr>
             </table>
@@ -513,7 +555,7 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                         <?php if (count($form_languages) > 1): ?>
                             <?php foreach ($form_languages as $lang): ?>
                                 <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                    <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                     <input type="text" name="settings[user_confirmation_subject_<?php echo $lang; ?>]" class="large-text" 
                                            value="<?php echo isset($form['settings']['user_confirmation_subject_' . $lang]) ? esc_attr($form['settings']['user_confirmation_subject_' . $lang]) : 'Vielen Dank für Ihre Nachricht'; ?>">
                                 </div>
@@ -533,7 +575,7 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                         <?php if (count($form_languages) > 1): ?>
                             <?php foreach ($form_languages as $lang): ?>
                                 <div class="field-translation" data-lang="<?php echo $lang; ?>" style="<?php echo $lang !== $current_edit_language ? 'display:none;' : ''; ?>">
-                                    <label><strong><?php echo $available_languages[$lang]; ?>:</strong></label>
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
                                     <textarea name="settings[user_confirmation_message_<?php echo $lang; ?>]" class="large-text" rows="8"><?php echo isset($form['settings']['user_confirmation_message_' . $lang]) ? esc_textarea($form['settings']['user_confirmation_message_' . $lang]) : "Vielen Dank für Ihre Nachricht!\n\nWir haben Ihre Anfrage erhalten und werden uns so schnell wie möglich bei Ihnen melden.\n\nMit freundlichen Grüßen"; ?></textarea>
                                 </div>
                             <?php endforeach; ?>
@@ -577,7 +619,18 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                 <tr class="field-label-row">
                     <th><label>Label</label></th>
                     <td>
-                        <input type="text" class="field-label regular-text" name="fields[{{index}}][label]">
+                        <?php if (count($form_languages) > 1): ?>
+                            <?php foreach ($form_languages as $lang): ?>
+                                <div class="field-translation field-label-translation" data-lang="<?php echo esc_attr($lang); ?>">
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
+                                    <input type="text" class="field-label regular-text"
+                                           name="fields[{{index}}][label_<?php echo esc_attr($lang); ?>]"
+                                           <?php echo $lang === $default_language ? 'required' : ''; ?>>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <input type="text" class="field-label regular-text" name="fields[{{index}}][label]">
+                        <?php endif; ?>
                         <p class="description">Optional für Bild- und Text-Info-Felder</p>
                     </td>
                 </tr>
@@ -594,13 +647,31 @@ $current_edit_language = isset($_GET['lang']) ? sanitize_text_field($_GET['lang'
                 <tr class="field-placeholder-row">
                     <th><label>Platzhalter</label></th>
                     <td>
-                        <input type="text" class="field-placeholder regular-text" name="fields[{{index}}][placeholder]">
+                        <?php if (count($form_languages) > 1): ?>
+                            <?php foreach ($form_languages as $lang): ?>
+                                <div class="field-translation field-always-visible-translation" data-lang="<?php echo esc_attr($lang); ?>">
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
+                                    <input type="text" class="field-placeholder regular-text" name="fields[{{index}}][placeholder_<?php echo esc_attr($lang); ?>]">
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <input type="text" class="field-placeholder regular-text" name="fields[{{index}}][placeholder]">
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <tr class="field-options-row" style="display: none;">
                     <th><label>Optionen</label></th>
                     <td>
-                        <textarea class="field-options regular-text" name="fields[{{index}}][options]" rows="3"></textarea>
+                        <?php if (count($form_languages) > 1): ?>
+                            <?php foreach ($form_languages as $lang): ?>
+                                <div class="field-translation field-always-visible-translation" data-lang="<?php echo esc_attr($lang); ?>">
+                                    <label><strong><?php echo esc_html($language_label($lang)); ?>:</strong></label>
+                                    <textarea class="field-options regular-text" name="fields[{{index}}][options_<?php echo esc_attr($lang); ?>]" rows="3"></textarea>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <textarea class="field-options regular-text" name="fields[{{index}}][options]" rows="3"></textarea>
+                        <?php endif; ?>
                         <p class="description">Eine Option pro Zeile. Bei Checkbox-Gruppe: Option mit ;checked vorbelegen (z.B. Newsletter;checked)</p>
                     </td>
                 </tr>

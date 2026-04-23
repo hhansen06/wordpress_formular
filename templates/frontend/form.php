@@ -4,29 +4,46 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Bestimme aktuelle Sprache (z.B. aus URL-Parameter oder Browser-Einstellung)
-$current_lang = isset($_GET['lang']) ? sanitize_text_field($_GET['lang']) : 'de';
+// Bestimme aktuelle Sprache aus wordpress_multilang (falls aktiv) oder Fallback.
+$current_lang = function_exists('form_builder_get_current_language_code')
+    ? form_builder_get_current_language_code()
+    : (isset($_GET['lang']) ? sanitize_key(wp_unslash($_GET['lang'])) : 'de');
 
 // Stelle sicher, dass languages ein Array ist
-$form_languages = array('de');
+$default_lang = !empty($form['settings']['default_language'])
+    ? sanitize_key($form['settings']['default_language'])
+    : (function_exists('form_builder_get_default_language_code') ? form_builder_get_default_language_code() : 'de');
+
+$form_languages = array($default_lang);
 if (!empty($form['settings']['languages'])) {
     if (is_array($form['settings']['languages'])) {
-        $form_languages = $form['settings']['languages'];
+        $form_languages = array_values(array_map('sanitize_key', $form['settings']['languages']));
     } elseif (is_string($form['settings']['languages'])) {
-        $form_languages = array($form['settings']['languages']);
+        $form_languages = array(sanitize_key($form['settings']['languages']));
     }
 }
 
+$form_languages = array_values(array_filter($form_languages));
+if (empty($form_languages)) {
+    $form_languages = array($default_lang);
+}
+
 if (!in_array($current_lang, $form_languages)) {
-    $current_lang = $form['settings']['default_language'] ?? 'de';
+    $current_lang = in_array($default_lang, $form_languages, true) ? $default_lang : $form_languages[0];
 }
 
 // Helper-Funktion für mehrsprachige Texte
 if (!function_exists('form_builder_get_translated_text')) {
-    function form_builder_get_translated_text($field, $key, $current_lang, $default = '') {
+    function form_builder_get_translated_text($field, $key, $current_lang, $default = '', $fallback_lang = '') {
         $lang_key = $key . '_' . $current_lang;
         if (!empty($field[$lang_key])) {
             return $field[$lang_key];
+        }
+        if (!empty($fallback_lang)) {
+            $fallback_key = $key . '_' . $fallback_lang;
+            if (!empty($field[$fallback_key])) {
+                return $field[$fallback_key];
+            }
         }
         // Fallback zur Standardsprache
         if (!empty($field[$key])) {
@@ -39,6 +56,7 @@ if (!function_exists('form_builder_get_translated_text')) {
 
 <div class="form-builder-wrapper">
     <form class="form-builder-form" data-form-id="<?php echo $form['id']; ?>">
+        <input type="hidden" name="form_lang" value="<?php echo esc_attr($current_lang); ?>">
         <?php if (!empty($form['description'])): ?>
             <div class="form-builder-description">
                 <?php echo wpautop(esc_html($form['description'])); ?>
